@@ -27,7 +27,7 @@ so I think my solution is at least better.
 
 Usage example:
 
->>> smb = smbcleint.SambaClient(server="MYSERVER", share="MYSHARE", 
+>>> smb = smbclient.SambaClient(server="MYSERVER", share="MYSHARE", 
                                 username='foo', password='bar', domain='baz')
 >>> print smb.listdir("/")
 [u'file1.txt', u'file2.txt']

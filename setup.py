@@ -27,7 +27,7 @@ so I think my solution is at least better.
 
 Usage example:
 
->>> smb = smbcleint.SambaClient(server="MYSERVER", share="MYSHARE", 
+>>> smb = smbclient.SambaClient(server="MYSERVER", share="MYSHARE", 
                                 username='foo', password='bar', domain='baz')
 >>> print smb.listdir("/")
 [u'file1.txt', u'file2.txt']
@@ -40,7 +40,7 @@ Usage example:
 from distutils.core import setup
 
 setup(name='PySmbClient',
-          version='0.1',
+          version='0.1.1',
           description="A convenient smbclient wrapper",
           long_description=__doc__,
           author="nosklo",
@@ -56,7 +56,7 @@ setup(name='PySmbClient',
             'Topic :: System :: Filesystems',
             'Topic :: System :: Networking',
             'Topic :: Utilities',
-          ]
+          ],
           py_modules=['smbclient'],
       )
       
