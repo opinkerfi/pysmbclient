@@ -27,12 +27,17 @@ so I think my solution is at least better.
 
 {{{
 import smbclient
-smb = smbclient.SambaClient(server, share, username, password, domain=None, 
-                            resolve_order=None, port=None, ip=None, 
+
+smb = smbclient.SambaClient(self, server, share, username=None, password=None, 
+                            domain=None, resolve_order=None, port=None, ip=None, 
                             terminal_code=None, buffer_size=None, 
                             debug_level=None, config_file=None, logdir=None, 
-                            netbios_name=None)
+                            netbios_name=None, kerberos=False)
+
 }}}
+
+If you want to use kerberos authentication just use the argument 
+{{{kerberos=True}}} and you don't need to pass username and password.
 
 ==== Supported methods of operation ====
 
