@@ -94,6 +94,8 @@ class SambaClient(object):
         self._unlink = os.unlink # keep a ref to unlink for future use
         self.path = '//%s/%s' % (server, share)
         smbclient_cmd = ['smbclient', self.path]
+        if username is None:
+            kerberos = True
         self._kerberos = kerberos
         if kerberos:
             smbclient_cmd.append('-k')
