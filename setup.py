@@ -40,7 +40,7 @@ Usage example:
 from distutils.core import setup
 
 setup(name='PySmbClient',
-          version='0.1.1',
+          version='0.1.2',
           description="A convenient smbclient wrapper",
           long_description=__doc__,
           author="nosklo",
