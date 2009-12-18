@@ -86,12 +86,17 @@ $                   # end of string""", re.VERBOSE)
 class SambaClientError(OSError): pass
 
 class SambaClient(object):
-    def __init__(self, server, share, username, password, domain=None, 
-                 resolve_order=None, port=None, ip=None, terminal_code=None, 
-                 buffer_size=None, debug_level=None, config_file=None, 
-                 logdir=None, netbios_name=None):
+    def __init__(self, server, share, username=None, password=None, 
+                 domain=None, resolve_order=None, port=None, ip=None, 
+                 terminal_code=None, buffer_size=None, debug_level=None, 
+                 config_file=None, logdir=None, netbios_name=None, 
+                 kerberos=False):
+        self._unlink = os.unlink # keep a ref to unlink for future use
         self.path = '//%s/%s' % (server, share)
         smbclient_cmd = ['smbclient', self.path]
+        self._kerberos = kerberos
+        if kerberos:
+            smbclient_cmd.append('-k')
         if resolve_order:
             smbclient_cmd.extend(['-R', ' '.join(resolve_order)])
         if port:
@@ -110,20 +115,20 @@ class SambaClient(object):
             smbclient_cmd.extend(['-s', config_file])
         if logdir:
             smbclient_cmd.extend(['-l', logdir])
-        self.auth = {'username': username}
-        if domain:
-            self.auth['domain'] = domain
-        if password:
-            self.auth['password'] = password
-        else:
-            smbclient_cmd.append('-N')
-        self.auth_file = tempfile.NamedTemporaryFile(prefix="smb.auth.", 
-                                                     delete=False)
-        self.auth_file.write('\n'.join('%s=%s' % (k, v) 
-                                       for k, v in self.auth.iteritems()))
-        self.auth_file.close()
-        self._unlink = os.unlink # keep a ref to unlink for future use
-        smbclient_cmd.extend(['-A', self.auth_file.name])
+        if not kerberos:
+            self.auth = {'username': username}
+            if domain:
+                self.auth['domain'] = domain
+            if password:
+                self.auth['password'] = password
+            else:
+                smbclient_cmd.append('-N')
+            self.auth_file = tempfile.NamedTemporaryFile(prefix="smb.auth.", 
+                                                         delete=False)
+            self.auth_file.write('\n'.join('%s=%s' % (k, v) 
+                                           for k, v in self.auth.iteritems()))
+            self.auth_file.close()
+            smbclient_cmd.extend(['-A', self.auth_file.name])
         if netbios_name:
             smbclient_cmd.extend(['-n', netbios_name])
         self._smbclient_cmd = smbclient_cmd
@@ -131,7 +136,7 @@ class SambaClient(object):
         
     def _raw_runcmd(self, command):
         # run-a-new-smbclient-process-each-time implementation
-        # TODO: Launch and keep one smbclient runnings
+        # TODO: Launch and keep one smbclient running
         cmd = self._smbclient_cmd + ['-c', command.encode('utf8')]
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                                   stderr=subprocess.STDOUT)
@@ -167,7 +172,10 @@ class SambaClient(object):
             cmd.extend(('-D', delete))
         if define:
             cmd.extend(('-S', define))
-        cmd.extend(('-U', r'%(domain)s\%(username)s%%%(password)s' % self.auth))
+        if self._kerberos:
+            cmd.append('-k')
+        else:
+            cmd.extend(('-U', r'%(domain)s\%(username)s%%%(password)s' % self.auth))
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
                                   stderr=subprocess.STDOUT)
         data = p.communicate()[0].strip()
@@ -380,7 +388,8 @@ class SambaClient(object):
     def close(self):
         for f in self._open_files.keys():
             f.close()
-        self._unlink(self.auth_file.name)
+        if not self._kerberos:
+            self._unlink(self.auth_file.name)
 
 class _SambaFile(object):
     """
