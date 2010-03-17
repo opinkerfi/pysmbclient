@@ -66,7 +66,7 @@ $
 _file_re = re.compile(r"""
 \s{2}               # file lines start with 2 spaces
 (.*?)\s+            # capture filename non-greedy, eating remaining spaces
-([ADHS]+)           # capture file mode
+([ADHSR]+)          # capture file mode
 \s+                 # after the mode you can have any number of spaces
 (\d+)               # file size
 \s+                 # spaces after file size
