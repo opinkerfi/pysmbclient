@@ -40,12 +40,30 @@ Usage example:
 
 import subprocess
 import datetime
+import time
 import re
 import os
 import collections
 import weakref
 import tempfile
 import locale
+
+try:
+    any
+except NameError:
+    # python version older than 2.5
+    def any(iterable):
+        for element in iterable:
+            if element:
+                return True
+        return False
+
+try:
+    datetime_strptime = datetime.datetime.strptime
+except AttributeError:
+    # python version older than 2.5
+    def datetime_strptime(date, format):
+        return datetime.datetime(*(time.strptime(date, format)[:6]))
 
 _volume_re = re.compile(r"""
 Volume:\s        # label
@@ -125,12 +143,12 @@ class SambaClient(object):
                 self.auth['password'] = password
             else:
                 smbclient_cmd.append('-N')
-            self.auth_file = tempfile.NamedTemporaryFile(prefix="smb.auth.", 
-                                                         delete=False)
-            self.auth_file.write('\n'.join('%s=%s' % (k, v) 
-                                           for k, v in self.auth.iteritems()))
-            self.auth_file.close()
-            smbclient_cmd.extend(['-A', self.auth_file.name])
+            fd, self.auth_filename = tempfile.mkstemp(prefix="smb.auth.")
+            auth_file = os.fdopen(fd, 'w+b')
+            auth_file.write('\n'.join('%s=%s' % (k, v) 
+                            for k, v in self.auth.iteritems()))
+            auth_file.close()
+            smbclient_cmd.extend(['-A', self.auth_filename])
         if netbios_name:
             smbclient_cmd.extend(['-n', netbios_name])
         self._smbclient_cmd = smbclient_cmd
@@ -234,7 +252,8 @@ class SambaClient(object):
                 # (non thread-safe code)
                 loc = locale.getlocale(locale.LC_TIME)
                 locale.setlocale(locale.LC_TIME, 'C')
-                date = datetime.datetime.strptime(date, '%a %b %d %H:%M:%S %Y')
+                format = '%a %b %d %H:%M:%S %Y'
+                date = datetime_strptime(date, format)
                 locale.setlocale(locale.LC_TIME, loc)
                 yield (name, modes, size, date)
 
@@ -391,7 +410,7 @@ class SambaClient(object):
         for f in self._open_files.keys():
             f.close()
         if not self._kerberos:
-            self._unlink(self.auth_file.name)
+            self._unlink(self.auth_filename)
 
 class _SambaFile(object):
     """
