@@ -403,6 +403,12 @@ class SambaClient(object):
     def __del__(self):
         self.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        self.close()
+
     def __repr__(self):
         return '<SambaClient(%r@%r)>' % ('%(domain)s/%(username)s' % self.auth, 
                                          self.path)
@@ -465,19 +471,11 @@ class _SambaFile(object):
         return attr
         
     def __enter__(self):
-        self._file.__enter__()
         return self
 
-    def __exit__(self, exc, value, tb):
-        result = self._file.__exit__(exc, value, tb)
+    def __exit__(self, exc_type, exc_value, exc_traceback):
         self.close()
-        return result
 
     def __del__(self):
         self.close()
-        
 
-if __name__ == '__main__':
-    smb = SambaClient(server='some_server', share='myshare', username='user',
-                      password='pass', domain='domain')
-                      
