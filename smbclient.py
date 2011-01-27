@@ -22,12 +22,12 @@ an API similar to the one provided by python `os` module.
 
 It is an ugly hack, but it is here for anyone that finds it useful.
 
-The programmer before me was using a "bash" file with lots of smbclient calls, 
+The programmer before me was using a "bash" file with lots of smbclient calls,
 so I think my solution is at least better.
 
 Usage example:
 
->>> smb = smbclient.SambaClient(server="MYSERVER", share="MYSHARE", 
+>>> smb = smbclient.SambaClient(server="MYSERVER", share="MYSHARE",
                                 username='foo', password='bar', domain='baz')
 >>> print smb.listdir("/")
 [u'file1.txt', u'file2.txt']
@@ -104,11 +104,10 @@ $                   # end of string""", re.VERBOSE)
 class SambaClientError(OSError): pass
 
 class SambaClient(object):
-    def __init__(self, server, share, username=None, password=None, 
-                 domain=None, resolve_order=None, port=None, ip=None, 
-                 terminal_code=None, buffer_size=None, debug_level=None, 
-                 config_file=None, logdir=None, netbios_name=None, 
-                 kerberos=False):
+    def __init__(self, server, share, username=None, password=None,
+             domain=None, resolve_order=None, port=None, ip=None,
+             terminal_code=None, buffer_size=None, debug_level=None,
+             config_file=None, logdir=None, netbios_name=None, kerberos=False):
         self._unlink = os.unlink # keep a ref to unlink for future use
         self.path = '//%s/%s' % (server, share)
         smbclient_cmd = ['smbclient', self.path]
@@ -145,21 +144,21 @@ class SambaClient(object):
                 smbclient_cmd.append('-N')
             fd, self.auth_filename = tempfile.mkstemp(prefix="smb.auth.")
             auth_file = os.fdopen(fd, 'w+b')
-            auth_file.write('\n'.join('%s=%s' % (k, v) 
-                            for k, v in self.auth.iteritems()))
+            auth_file.write('\n'.join('%s=%s' % (k, v)
+                for k, v in self.auth.iteritems()))
             auth_file.close()
             smbclient_cmd.extend(['-A', self.auth_filename])
         if netbios_name:
             smbclient_cmd.extend(['-n', netbios_name])
         self._smbclient_cmd = smbclient_cmd
         self._open_files = weakref.WeakKeyDictionary()
-        
+
     def _raw_runcmd(self, command):
         # run-a-new-smbclient-process-each-time implementation
         # TODO: Launch and keep one smbclient running
         cmd = self._smbclient_cmd + ['-c', command.encode('utf8')]
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                                  stderr=subprocess.STDOUT)
+        p = subprocess.Popen(cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         result = p.communicate()[0].strip()
         if p.returncode != 0:
             raise SambaClientError('Error executing %r: %r' % (command, result))
@@ -196,13 +195,13 @@ class SambaClient(object):
             cmd.append('-k')
         else:
             cmd.extend(('-U', r'%(domain)s\%(username)s%%%(password)s' % self.auth))
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, 
-                                  stderr=subprocess.STDOUT)
+        p = subprocess.Popen(cmd,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         data = p.communicate()[0].strip()
         if p.returncode != 0:
-            raise SambaClientError('Error dealing with access control lists: %r' 
-                                   % data)
-        result = collections.defaultdict(dict)                                
+            raise SambaClientError(
+                'Error dealing with access control lists: %r' % data)
+        result = collections.defaultdict(dict)
         for line in data.splitlines():
             k, sep, val = line.partition(':')
             if sep:
@@ -223,7 +222,7 @@ class SambaClient(object):
                         val = int(val)
                     result[k] = val
         return result
-        
+
     def lsdir(self, path):
         """
         Lists a directory
@@ -252,8 +251,7 @@ class SambaClient(object):
                 # (non thread-safe code)
                 loc = locale.getlocale(locale.LC_TIME)
                 locale.setlocale(locale.LC_TIME, 'C')
-                format = '%a %b %d %H:%M:%S %Y'
-                date = datetime_strptime(date, format)
+                date = datetime_strptime(date, '%a %b %d %H:%M:%S %Y')
                 locale.setlocale(locale.LC_TIME, loc)
                 yield (name, modes, size, date)
 
@@ -274,8 +272,8 @@ class SambaClient(object):
                                   stderr=subprocess.STDOUT)
         result = p.communicate(message)[0].strip()
         if p.returncode != 0:
-            raise SambaClientError('Error sending message to %r: %r' % 
-                                   (destination, result))
+            raise SambaClientError(
+                'Error sending message to %r: %r' % (destination, result))
         return result
 
     def _getfile(self, path):
@@ -284,21 +282,21 @@ class SambaClient(object):
         except StopIteration:
             raise SambaClientError('Path not found: %r' % path)
         return f
-    
+
     def info(self, path):
         """Fetches information about a file"""
         path = path.replace('/', '\\')
         data = self._runcmd(u'allinfo', path)
         if data.startswith('ERRSRV'):
-            raise SambaClientError('Error retrieving info for %r: %r' % 
-                                   (path, data.strip()))
+            raise SambaClientError(
+                'Error retrieving info for %r: %r' % (path, data.strip()))
         result = {}
         for info in data.splitlines():
             k, sep, v = info.partition(':')
             if sep:
                 result[k.strip()] = v.strip()
         return result
-    
+
     def diskinfo(self):
         """Fetches information about a volume"""
         data = self._runcmd('volume')
@@ -308,9 +306,9 @@ class SambaClient(object):
                 name, serial = m.groups()
                 return name, int(serial, 16)
         else:
-            raise SambaClientError('Error retrieving disk information: %r' %
-                                   data)
-    
+            raise SambaClientError(
+                'Error retrieving disk information: %r' % data)
+
     def volume(self):
         """Fetches the volume name"""
         return self.diskinfo()[0]
@@ -318,7 +316,7 @@ class SambaClient(object):
     def serial(self):
         """Fetches the volume serial"""
         return self.diskinfo()[1]
-    
+
     def isdir(self, path):
         """Returns True if path is a directory/folder"""
         return 'D' in self._getfile(path)[1]
@@ -345,13 +343,13 @@ class SambaClient(object):
         """Removes a remote empty folder"""
         path = path.replace('/', '\\')
         self._runcmd_error_on_data(u'rmdir', path)
-    
+
     def unlink(self, path):
         """Removes/deletes/unlinks a file"""
         path = path.replace('/', '\\')
         self._runcmd_error_on_data(u'del', path)
     remove = unlink
-    
+
     def chmod(self, path, *modes):
         """Set/reset file modes
         Tested with: AHS
@@ -372,16 +370,16 @@ class SambaClient(object):
         if minus_modes:
             modes.append(u'-%s' % u''.join(minus_modes))
         self._runcmd_error_on_data(u'setmode', u''.join(modes))
-    
+
     def rename(self, old_name, new_name):
         old_name = old_name.replace('/', '\\')
         new_name = new_name.replace('/', '\\')
         self._runcmd_error_on_data(u'rename', old_name, new_name)
-    
+
     def download(self, remote_path, local_path):
         remote_path = remote_path.replace('/', '\\')
         result = self._runcmd('get', remote_path, local_path)
-        
+
     def upload(self, local_path, remote_path):
         remote_path = remote_path.replace('/', '\\')
         result = self._runcmd('put', local_path, remote_path)
@@ -392,13 +390,13 @@ class SambaClient(object):
 
     def open(self, path, mode='r'):
         """
-        Opens the file indicated by path and returns it as a file-like 
+        Opens the file indicated by path and returns it as a file-like
         object
         """
         f = _SambaFile(self, path, mode)
         self._open_files[f] = (path, mode)
         return f
-            
+
     # def du
     def __del__(self):
         self.close()
@@ -410,8 +408,9 @@ class SambaClient(object):
         self.close()
 
     def __repr__(self):
-        return '<SambaClient(%r@%r)>' % ('%(domain)s/%(username)s' % self.auth, 
-                                         self.path)
+        return '<SambaClient(%r@%r)>' % (
+            '%(domain)s/%(username)s' % self.auth, self.path)
+
     def close(self):
         for f in self._open_files.keys():
             f.close()
@@ -425,7 +424,7 @@ class _SambaFile(object):
     def __init__(self, connection, remote_name, mode='r'):
         self.name = remote_name
         (fd, self._tmp_name) = tempfile.mkstemp(suffix='.smb', text=False)
-        os.close(fd)       
+        os.close(fd)
         self._mode = mode
         self._conn = weakref.ref(connection)
         self._os_unlink = os.unlink # keep a ref to unlink for future use
@@ -449,19 +448,19 @@ class _SambaFile(object):
     def flush(self):
         self._file.flush()
         self._flush()
-    
+
     def close(self):
         self._file.close()
         self._flush()
         self.open = False
         self._unlink()
-    
+
     def _unlink(self):
         try:
             self._os_unlink(self._tmp_name)
         except OSError:
             pass
-        
+
     def __getattr__(self, name):
         # Attribute lookups are delegated to the underlying file
         # methods are cached to avoid extra lookup
@@ -469,7 +468,7 @@ class _SambaFile(object):
         if callable(attr):
             setattr(self, name, attr)
         return attr
-        
+
     def __enter__(self):
         return self
 
