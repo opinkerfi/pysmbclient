@@ -43,6 +43,7 @@ import datetime
 import time
 import re
 import os
+import errno
 import collections
 import weakref
 import tempfile
@@ -108,7 +109,6 @@ class SambaClient(object):
              domain=None, resolve_order=None, port=None, ip=None,
              terminal_code=None, buffer_size=None, debug_level=None,
              config_file=None, logdir=None, netbios_name=None, kerberos=False):
-        self._unlink = os.unlink # keep a ref to unlink for future use
         self.path = '//%s/%s' % (server, share)
         smbclient_cmd = ['smbclient', self.path]
         if username is None:
@@ -145,7 +145,7 @@ class SambaClient(object):
             fd, self.auth_filename = tempfile.mkstemp(prefix="smb.auth.")
             auth_file = os.fdopen(fd, 'w+b')
             auth_file.write('\n'.join('%s=%s' % (k, v)
-                for k, v in self.auth.iteritems()))
+                for k, v in self.auth.iteritems()))c
             auth_file.close()
             smbclient_cmd.extend(['-A', self.auth_filename])
         if netbios_name:
@@ -411,11 +411,15 @@ class SambaClient(object):
         return '<SambaClient(%r@%r)>' % (
             '%(domain)s/%(username)s' % self.auth, self.path)
 
-    def close(self):
+    def close(self, _unlink=os.unlink, _errno_ENOENT=errno.ENOENT):
         for f in self._open_files.keys():
             f.close()
         if not self._kerberos:
-            self._unlink(self.auth_filename)
+            try:
+                _unlink(self.auth_filename)
+            except OSError, e:
+                if e.errno != _errno_ENOENT:
+                    raise # unrelated error
 
 class _SambaFile(object):
     """
