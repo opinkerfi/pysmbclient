@@ -145,7 +145,7 @@ class SambaClient(object):
             fd, self.auth_filename = tempfile.mkstemp(prefix="smb.auth.")
             auth_file = os.fdopen(fd, 'w+b')
             auth_file.write('\n'.join('%s=%s' % (k, v)
-                for k, v in self.auth.iteritems()))c
+                for k, v in self.auth.iteritems()))
             auth_file.close()
             smbclient_cmd.extend(['-A', self.auth_filename])
         if netbios_name:
