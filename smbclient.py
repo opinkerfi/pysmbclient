@@ -136,8 +136,8 @@ class SambaClient(object):
             smbclient_cmd.extend(['-l', logdir])
         if not kerberos:
             self.auth = {'username': username}
-            if domain:
-                self.auth['domain'] = domain
+            # some connections use server address as domain
+            self.auth['domain'] = domain or server
             if password:
                 self.auth['password'] = password
             else:
@@ -455,7 +455,10 @@ class _SambaFile(object):
 
     def close(self):
         self._file.close()
-        self._flush()
+        try:
+            self._flush()
+        except SambaClientError,err:
+            pass # fail silently because upload_update can break close
         self.open = False
         self._unlink()
 
