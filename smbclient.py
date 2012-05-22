@@ -161,9 +161,8 @@ class SambaClient(object):
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         result = p.communicate()[0].strip()
         if p.returncode != 0:
-            raise SambaClientError('Error executing %r: %r' % (command, result))
+            raise SambaClientError("Error on %r: %r" % (' '.join(cmd), result))
         return result
-
 
     def _runcmd(self, command, *args):
         fullcmdlist = [command]
@@ -397,10 +396,6 @@ class SambaClient(object):
         self._open_files[f] = (path, mode)
         return f
 
-    # def du
-    def __del__(self):
-        self.close()
-
     def __enter__(self):
         return self
 
@@ -481,7 +476,3 @@ class _SambaFile(object):
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.close()
-
-    def __del__(self):
-        self.close()
-
