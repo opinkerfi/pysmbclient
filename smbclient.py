@@ -39,6 +39,8 @@ Usage example:
 
 
 import subprocess
+import pty
+import signal
 import datetime
 import time
 import re
@@ -48,6 +50,7 @@ import collections
 import weakref
 import tempfile
 import locale
+import select
 
 try:
     any
@@ -103,6 +106,8 @@ _file_re = re.compile(r"""
 $                   # end of string""", re.VERBOSE)
 
 class SambaClientError(OSError): pass
+class SambaClientCantWrite(Exception): pass
+class SambaClientCantRead(Exception): pass
 
 class SambaClient(object):
     def __init__(self, server, share, username=None, password=None,
@@ -152,22 +157,72 @@ class SambaClient(object):
             smbclient_cmd.extend(['-n', netbios_name])
         self._smbclient_cmd = smbclient_cmd
         self._open_files = weakref.WeakKeyDictionary()
+        self.p = None
 
-    def _raw_runcmd(self, command):
-        # run-a-new-smbclient-process-each-time implementation
-        # TODO: Launch and keep one smbclient running
-        cmd = self._smbclient_cmd + ['-c', command.encode('utf8')]
-        p = subprocess.Popen(cmd,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        result = p.communicate()[0].strip()
-        if p.returncode != 0:
-            raise SambaClientError("Error on %r: %r" % (' '.join(cmd), result))
+    def readuntilprompt(self):
+        result = ''
+        while 1:
+#            if len(self.p[2].poll(1000)) <= 0:
+#                import ipdb
+#                ipdb.set_trace()
+            if len(self.p[2].poll(1000)) > 0: result += os.read(self.p[1], 1)
+            else: raise SambaClientCantRead(result)
+            if result.endswith('smb: \\> '): break
         return result
 
+    def get_poll(self):
+        if not self.p:
+            print "getting pool",id(self)
+            master, slave = pty.openpty()
+            pollin = select.poll()
+            pollin.register(master, select.POLLIN|select.POLLPRI)
+            pollout = select.poll()
+            pollout.register(master, select.POLLOUT)
+            self.p = (subprocess.Popen(self._smbclient_cmd, stdin=slave,
+                stdout=slave, stderr=slave), master, pollin, pollout)
+            self.readuntilprompt()
+        return self.p
+
+    def _raw_runcmd(self, command):
+        runcmd_attemps = getattr(self,'_runcmd_attemps')
+        if self.p:
+            print self.p[2].poll(1000),self.p[3].poll(1000)
+#        if command == u'ls "QAS/pagrem/*"':
+#            import ipdb
+#            ipdb.set_trace()
+        self.get_poll()
+#        if len(self.p[3].poll(1000)) <= 0:
+#            import ipdb
+#            ipdb.set_trace()
+        if len(self.p[3].poll(1000)) > 0: os.write(self.p[1], command + '\n')
+        print command
+        if command == 'quit':
+            self.p = None # just to ake sure
+            return ''
+        buf = self.readuntilprompt()
+        print buf
+        if buf.startswith('%s\r\nwrite_data: write failure' % command):
+            # if happens a error try 3 times, can be some sporadic connection
+            # error
+            print "Trying %s" % self._runcmd_attemps
+            if self._runcmd_attemps == 3:
+                raise SambaClientError(buf)
+            else:
+                print "Error on smbclient! Trying again (%s of 3), command: '%s'" % (self._runcmd_attemps,command)
+                self._runcmd_attemps += 1
+                self.disconnect()
+                time.sleep(0.5)
+                self._raw_runcmd(command)
+        self._runcmd_attemps = 1
+        return buf
+
+
     def _runcmd(self, command, *args):
+
         fullcmdlist = [command]
         fullcmdlist.extend(u'"%s"' % arg for arg in args)
         fullcmd = u' '.join(fullcmdlist)
+        self._runcmd_attemps = 1
         return self._raw_runcmd(fullcmd)
 
     def _runcmd_error_on_data(self, cmd, *args):
@@ -336,7 +391,8 @@ class SambaClient(object):
     def mkdir(self, path):
         """Creates a new folder remotely"""
         path = path.replace('/', '\\')
-        self._runcmd_error_on_data(u'mkdir', path)
+        self._runcmd(u'mkdir', path)
+        #self._runcmd_error_on_data(u'mkdir', path)
 
     def rmdir(self, path):
         """Removes a remote empty folder"""
@@ -387,6 +443,16 @@ class SambaClient(object):
         remote_path = remote_path.replace('/', '\\')
         result = self._runcmd('reput', local_path, remote_path)
 
+    def disconnect(self):
+        if self.p:
+            try:
+                print 'quiting'
+                self._raw_runcmd(u'quit')
+            except Exception, err:
+                print err
+                pass
+            self.p = None
+
     def open(self, path, mode='r'):
         """
         Opens the file indicated by path and returns it as a file-like
@@ -407,6 +473,7 @@ class SambaClient(object):
             '%(domain)s/%(username)s' % self.auth, self.path)
 
     def close(self, _unlink=os.unlink, _errno_ENOENT=errno.ENOENT):
+        self.disconnect()
         for f in self._open_files.keys():
             f.close()
         if not self._kerberos:
