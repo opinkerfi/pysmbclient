@@ -108,7 +108,8 @@ class SambaClient(object):
     def __init__(self, server, share, username=None, password=None,
              domain=None, resolve_order=None, port=None, ip=None,
              terminal_code=None, buffer_size=None, debug_level=None,
-             config_file=None, logdir=None, netbios_name=None, kerberos=False):
+             config_file=None, logdir=None, netbios_name=None, kerberos=False,
+             runcmd_attemps=1):
         self.path = '//%s/%s' % (server, share)
         smbclient_cmd = ['smbclient', self.path]
         self.debug_level = 0
@@ -152,6 +153,8 @@ class SambaClient(object):
             smbclient_cmd.extend(['-A', self.auth_filename])
         if netbios_name:
             smbclient_cmd.extend(['-n', netbios_name])
+        self.runcmd_num_of_attemps = runcmd_attemps
+        self._runcmd_attemps = 1
         self._smbclient_cmd = smbclient_cmd
         self._open_files = weakref.WeakKeyDictionary()
 
@@ -162,8 +165,14 @@ class SambaClient(object):
         p = subprocess.Popen(cmd,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         result = p.communicate()[0].strip()
-        if p.returncode != 0:
+        if p.returncode != 0 and self.runcmd_num_of_attemps:
+            if self._runcmd_attemps < self.runcmd_num_of_attemps:
+                self._runcmd_attemps += 1
+                print u"Number of attemps: %s (cmd: %s)" % (
+                    self._runcmd_attemps,cmd)
+                return self._raw_runcmd(command)
             raise SambaClientError("Error on %r: %r" % (' '.join(cmd), result))
+        self._runcmd_attemps = 1
         return result
 
     def _runcmd(self, command, *args):
